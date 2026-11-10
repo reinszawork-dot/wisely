@@ -1,0 +1,19 @@
+{
+  "name": "Wisely — Budget",
+  "short_name": "Wisely",
+  "description": "Budgets, goals, debts and animated charts. Private and offline.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0c0e16",
+  "theme_color": "#0c0e16",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Add expense", "short_name": "Expense", "url": "./?add=expense" },
+    { "name": "Add income", "short_name": "Income", "url": "./?add=income" }
+  ]
+}
