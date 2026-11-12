@@ -3,8 +3,23 @@
   'use strict';
 
   /* ---------- helpers ---------- */
-  const KEY = 'wisely.v1';
-  const $ = (s, r = document) => r.querySelector(s);
+  /* Pro: multiple budgets. Each budget is a complete, separate data set. The first one keeps the
+     original storage key, so existing data is never moved. */
+  const BOOKS_KEY = 'wisely.books';
+  const MAIN_BOOK = 'main';
+  function loadBooks() {
+    let b = null;
+    try { b = JSON.parse(localStorage.getItem(BOOKS_KEY) || 'null'); } catch (e) { /* ignore */ }
+    if (!b || !Array.isArray(b.list) || !b.list.length) b = { active: MAIN_BOOK, list: [{ id: MAIN_BOOK, name: 'Personal' }] };
+    if (!b.list.some((x) => x.id === MAIN_BOOK)) b.list.unshift({ id: MAIN_BOOK, name: 'Personal' });
+    if (!b.list.some((x) => x.id === b.active)) b.active = MAIN_BOOK;
+    return b;
+  }
+  const BOOKS = loadBooks();
+  const saveBooks = () => { try { localStorage.setItem(BOOKS_KEY, JSON.stringify(BOOKS)); } catch (e) { /* storage blocked */ } };
+  const bookKey = (id) => (id === MAIN_BOOK ? 'wisely.v1' : `wisely.v1.${id}`);
+  let KEY = bookKey(BOOKS.active);
+  const $ =(s, r = document) => r.querySelector(s);
   const $$ = (s, r = document) => [...r.querySelectorAll(s)];
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -431,6 +446,31 @@
   const catMark = (c) => (c ? `<span class="cat-mark" style="--c:${c.color}">${ci(c.icon, 13)}</span>` : '');
   const KIND_LABEL = { expense: 'Expense', income: 'Income', transfer: 'Transfer' };
 
+  /* ---------- NextWave Pro ---------- */
+  const PRO_FEATURES = [
+    'Year in review: your whole year on one screen, with a CSV download',
+    'Multiple budgets: keep household, personal or business money apart',
+    '6 extra colour themes, in light and dark',
+  ];
+  const PRO = window.NextWavePro ? window.NextWavePro.init({
+    app: 'wisely', name: 'Wisely Pro', price: 'R99 once-off',
+    buyUrl: 'https://payhip.com', // TODO: real Payhip product link from the owner
+    features: PRO_FEATURES, accent: '#6c4dff',
+  }) : { isPro: () => false, gate: () => toast('Pro is unavailable offline right now.'), open: () => {} };
+  const isPro = () => PRO.isPro();
+  const proGate = (feature, fn) => PRO.gate(feature, fn);
+  /** Small "Pro" badge for gated controls; hidden once Pro is unlocked. */
+  const proBadge = () => (isPro() ? '' : `<span class="pro-badge">${ci('sparkles', 11)}Pro</span>`);
+  const ACCENTS = [
+    { id: 'violet', name: 'Violet', swatch: '#6c4dff' },
+    { id: 'ocean', name: 'Ocean', swatch: '#0b84d8' },
+    { id: 'forest', name: 'Forest', swatch: '#1f9d6a' },
+    { id: 'sunset', name: 'Sunset', swatch: '#ee6a2c' },
+    { id: 'rose', name: 'Rose', swatch: '#e0457b' },
+    { id: 'gold', name: 'Gold', swatch: '#c48a06' },
+    { id: 'graphite', name: 'Graphite', swatch: '#4a5164' },
+  ];
+
   const NAV = [
     { id: 'home', label: 'Home' }, { id: 'activity', label: 'Activity' }, { id: 'budgets', label: 'Budgets' }, { id: 'reports', label: 'Reports' },
     { id: 'accounts', label: 'Accounts' }, { id: 'goals', label: 'Goals' }, { id: 'recurring', label: 'Recurring' }, { id: 'debts', label: 'Debts' },
@@ -439,7 +479,8 @@
   const BOTTOM = ['home', 'activity', 'budgets', 'reports', 'more'];
 
   function drawNav() {
-    $('#sideNav').innerHTML = NAV.map((n, i) => `${i === 4 ? '<div class="nav-sep">Plan</div>' : i === 8 ? '<div class="nav-sep">Manage</div>' : ''}<a href="#/${n.id}" data-nav="${n.id}">${icon(n.id, 20)}<span>${n.label}</span></a>`).join('');
+    const book = BOOKS.list.length > 1 ? `<a class="book-chip" href="#/settings" title="Switch budget">${ci('wallet', 16)}<span>${esc(BOOKS.list.find((b) => b.id === BOOKS.active)?.name)}</span></a>` : '';
+    $('#sideNav').innerHTML = book + NAV.map((n, i) => `${i === 4 ? '<div class="nav-sep">Plan</div>' : i === 8 ? '<div class="nav-sep">Manage</div>' : ''}<a href="#/${n.id}" data-nav="${n.id}">${icon(n.id, 20)}<span>${n.label}</span></a>`).join('');
     $('#bottomNav').innerHTML = BOTTOM.map((id) => `<a href="#/${id}" data-nav="${id}">${icon(id, 22)}<span>${id === 'more' ? 'More' : NAV.find((n) => n.id === id).label}</span></a>`).join('');
   }
   function markNav(r) {
@@ -768,7 +809,7 @@
     };
 
     const dailyAvg = sum(dailySpend(rm)) / elapsed(rm);
-    return `${header('Reports', 'See the patterns behind your money.', `<div class="seg sm" role="group" aria-label="Range">${[3, 6, 12].map((n) => `<button class="${UI.range === n ? 'on' : ''}" data-act="range" data-n="${n}">${n}M</button>`).join('')}</div>`)}
+    return `${header('Reports', 'See the patterns behind your money.', `<button class="btn ghost sm" data-act="year-review">${ci('calendar', 16)} Year in review${proBadge()}</button><div class="seg sm" role="group" aria-label="Range">${[3, 6, 12].map((n) => `<button class="${UI.range === n ? 'on' : ''}" data-act="range" data-n="${n}">${n}M</button>`).join('')}</div>`)}
     <div class="grid">
       <div class="tiles span-12">
         <div class="tile"><span>Avg monthly income</span><b data-count="${avgInc}">${fmtW(avgInc)}</b></div>
@@ -942,6 +983,22 @@
         <label class="field"><span>Payday</span><select id="setPay">${Array.from({ length: 28 }, (_, i) => i + 1).map((d) => `<option value="${d}" ${payday() === d ? 'selected' : ''}>${d === 1 ? '1st — use calendar months' : `The ${ordinal(d)} of each month`}</option>`).join('')}</select>
           <small class="muted">Your budget month runs from payday to the day before the next one. Pick 1st for normal calendar months.</small></label>
         <div class="field"><span>Theme</span><div class="seg">${['auto', 'light', 'dark'].map((t) => `<button class="${S.settings.theme === t ? 'on' : ''}" data-act="theme" data-t="${t}">${t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
+        <div class="field"><span class="accent-label">Colour ${proBadge()}</span><div class="accent-row" role="radiogroup" aria-label="Colour theme">${ACCENTS.map((a) => {
+          const on = (isPro() ? S.settings.accent || 'violet' : 'violet') === a.id;
+          return `<button class="accent-sw${on ? ' on' : ''}" role="radio" aria-checked="${on}" data-act="accent" data-a="${a.id}" style="--sw:${a.swatch}" title="${a.name}${a.id === 'violet' || isPro() ? '' : ' (Pro)'}"><span></span><em>${a.name}</em></button>`;
+        }).join('')}</div></div>
+      </section>
+      <section class="card span-6 pro-card"><div class="card-h"><h2>NextWave Pro</h2>${isPro() ? `<span class="pill good">${ci('check', 12)} Unlocked</span>` : '<span class="pill">R99 once-off</span>'}</div>
+        <p class="muted">${isPro() ? 'Thanks for supporting Wisely. Everything below is unlocked on this device.' : 'Everything in Wisely stays free. Pro adds a few extras, paid once:'}</p>
+        <ul class="pro-list">${PRO_FEATURES.map((f) => `<li>${ci('check', 14)}<span>${esc(f)}</span></li>`).join('')}</ul>
+        <button class="btn ${isPro() ? 'ghost' : 'primary'} sm" data-act="pro-open">${ci('sparkles', 16)} ${isPro() ? 'Manage licence key' : 'Get Wisely Pro'}</button>
+      </section>
+      <section class="card span-6"><div class="card-h"><h2>Budgets ${proBadge()}</h2><button class="btn ghost sm" data-act="book-new">${ci('plus', 16)} New budget</button></div>
+        <p class="muted">Keep separate money apart, like a household budget and your personal one. Each budget has its own accounts, transactions and goals.</p>
+        <div class="book-list">${BOOKS.list.map((b) => `<div class="book-row${b.id === BOOKS.active ? ' on' : ''}"><span class="book-ico">${ci(b.id === MAIN_BOOK ? 'user' : 'wallet', 18)}</span>
+          <span class="tx-main"><span class="tx-title">${esc(b.name)}</span><span class="tx-sub">${b.id === BOOKS.active ? 'Open now' : b.id === MAIN_BOOK ? 'Your first budget' : 'Separate budget'}</span></span>
+          <span class="btn-row">${b.id === BOOKS.active ? '' : `<button class="btn primary sm" data-act="book-open" data-id="${b.id}">Open</button>`}<button class="icon-btn" data-act="book-edit" data-id="${b.id}" aria-label="Rename ${esc(b.name)}">${icon('edit', 16)}</button></span></div>`).join('')}</div>
+        ${BOOKS.list.length > 1 ? '<p class="hint">Backups and CSV exports cover the budget that is open.</p>' : ''}
       </section>
       <section class="card span-6"><div class="card-h"><h2>Privacy</h2></div>
         <p class="muted">Lock the app with a passcode. It is asked for when you open Wisely or come back after a minute away.</p>
@@ -1881,6 +1938,132 @@
     if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
     const dark = t === 'dark' || (t === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
     $('meta[name=theme-color]').setAttribute('content', dark ? '#0c0e16' : '#f4f5fa');
+    // Colour themes are Pro; without Pro the app keeps its original violet.
+    const a = isPro() && S.settings.accent && S.settings.accent !== 'violet' ? S.settings.accent : null;
+    if (a) document.documentElement.setAttribute('data-accent', a); else document.documentElement.removeAttribute('data-accent');
+  }
+
+  /* ---------- Pro: year in review ---------- */
+  function yearsWithData() {
+    const ys = new Set(S.txns.map((t) => periodOf(t.date).slice(0, 4)));
+    ys.add(curP().slice(0, 4));
+    return [...ys].sort();
+  }
+  function yearData(y) {
+    const months = Array.from({ length: 12 }, (_, i) => `${y}-${pad(i + 1)}`).filter((m) => m <= curP());
+    const T = months.map(totals);
+    const inc = sum(T.map((t) => t.inc)), exp = sum(T.map((t) => t.exp));
+    const cats = {}, merch = {};
+    let biggest = null;
+    months.forEach((m) => {
+      Object.entries(catTotals(m)).forEach(([id, v]) => (cats[id] = (cats[id] || 0) + v));
+      monthTx(m).forEach((t) => {
+        if (t.type !== 'expense') return;
+        if (t.note) merch[t.note] = (merch[t.note] || 0) + t.amount;
+        if (!biggest || t.amount > biggest.amount) biggest = t;
+      });
+    });
+    const active = months.map((m, i) => ({ m, ...T[i] })).filter((x) => x.inc || x.exp);
+    const best = active.length ? active.reduce((a, b) => (b.net > a.net ? b : a)) : null;
+    const priciest = active.length ? active.reduce((a, b) => (b.exp > a.exp ? b : a)) : null;
+    const first = months[0], last = months[months.length - 1];
+    const nwStart = first ? netWorth(dstr(new Date(parseD(pStart(first)) - 864e5))) : 0;
+    const nwEnd = last ? netWorth(monthEnd(last)) : 0;
+    const prevExp = sum(Array.from({ length: months.length }, (_, i) => totals(`${+y - 1}-${pad(i + 1)}`).exp));
+    return { months, T, inc, exp, net: inc - exp, cats, merch, biggest, best, priciest, nwStart, nwEnd, prevExp, active };
+  }
+  function yearCSV(y) {
+    const d = yearData(y);
+    const ids = Object.keys(d.cats).sort((a, b) => d.cats[b] - d.cats[a]);
+    const q = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const rows = [['Month', 'Income', 'Expenses', 'Net', ...ids.map((id) => cat(id)?.name || id)]];
+    d.months.forEach((m, i) => { const ct = catTotals(m); rows.push([pLabel(m), r2(d.T[i].inc), r2(d.T[i].exp), r2(d.T[i].net), ...ids.map((id) => r2(ct[id] || 0))]); });
+    rows.push(['Total', r2(d.inc), r2(d.exp), r2(d.net), ...ids.map((id) => r2(d.cats[id]))]);
+    download(`wisely-${y}-year-in-review.csv`, rows.map((r) => r.map(q).join(',')).join('\n'), 'text/csv');
+    toast(`${y} summary downloaded`);
+  }
+  function yearSheet(y) {
+    const years = yearsWithData();
+    y = y || (S.txns.some((t) => periodOf(t.date).startsWith(curP().slice(0, 4))) ? curP().slice(0, 4) : years[years.length - 1]);
+    const d = yearData(y);
+    const i = years.indexOf(y);
+    const rate = d.inc > 0 ? (d.net / d.inc) * 100 : 0;
+    const topCats = Object.entries(d.cats).map(([id, v]) => ({ c: cat(id), v })).filter((x) => x.c).sort((a, b) => b.v - a.v).slice(0, 6);
+    const topM = Object.entries(d.merch).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const lbl = (m) => (payday() === 1 ? monthLabel(m, 'long', false) : pLabel(m));
+    const range = d.months.length ? `${shortD(pStart(d.months[0]))} ${parseD(pStart(d.months[0])).getFullYear()} – ${shortD(monthEnd(d.months[d.months.length - 1]))} ${parseD(monthEnd(d.months[d.months.length - 1])).getFullYear()}` : '';
+    const vsPrev = d.prevExp > 0 ? ((d.exp - d.prevExp) / d.prevExp) * 100 : null;
+    const body = d.active.length ? `<div class="yr">
+      <div class="yr-head"><div class="month-switch" role="group" aria-label="Choose year">
+        <button class="icon-btn" id="yrPrev" aria-label="Previous year" ${i <= 0 ? 'disabled' : ''}>${icon('chevL', 18)}</button><span class="ms-label">${y}</span>
+        <button class="icon-btn" id="yrNext" aria-label="Next year" ${i >= years.length - 1 ? 'disabled' : ''}>${icon('chevR', 18)}</button></div><span class="muted sm">${range}</span></div>
+      <div class="tiles yr-tiles"><div class="tile"><span>Money in</span><b class="pos">${fmtW(d.inc)}</b></div><div class="tile"><span>Money out</span><b class="neg">${fmtW(d.exp)}</b></div>
+        <div class="tile"><span>Kept</span><b class="${d.net < 0 ? 'neg' : ''}">${fmtW(d.net)}</b></div><div class="tile"><span>Savings rate</span><b class="${rate < 0 ? 'neg' : 'pos'}">${rate.toFixed(0)}%</b></div></div>
+      <div id="yrBars" class="chart-box"></div>
+      <ul class="yr-facts">
+        ${d.best ? `<li>${ci('star', 16)}<span>Best month: <b>${lbl(d.best.m)}</b>, you kept ${fmtW(d.best.net)}</span></li>` : ''}
+        ${d.priciest ? `<li>${ci('alert', 16)}<span>Priciest month: <b>${lbl(d.priciest.m)}</b>, ${fmtW(d.priciest.exp)} out</span></li>` : ''}
+        ${d.biggest ? `<li>${ci('receipt', 16)}<span>Biggest expense: <b>${esc(d.biggest.note || cat(d.biggest.categoryId)?.name || 'Expense')}</b>, ${fmt(d.biggest.amount)} on ${fmtDate(d.biggest.date)}</span></li>` : ''}
+        <li>${ci('trendUp', 16)}<span>Net worth went from <b>${fmtW(d.nwStart)}</b> to <b>${fmtW(d.nwEnd)}</b> (${d.nwEnd - d.nwStart >= 0 ? '+' : '−'}${fmtW(Math.abs(d.nwEnd - d.nwStart))})</span></li>
+        ${vsPrev != null ? `<li>${ci('pie', 16)}<span>You spent <b>${Math.abs(vsPrev).toFixed(0)}% ${vsPrev > 0 ? 'more' : 'less'}</b> than the same months in ${+y - 1}</span></li>` : ''}
+      </ul>
+      <h3 class="yr-h">Where it went</h3>
+      <ul class="merch">${topCats.map((x) => `<li><span>${catMark(x.c)}${esc(x.c.name)}</span>${bar(x.v / topCats[0].v, x.c.color, 'thin')}<b>${fmtW(x.v)}</b></li>`).join('')}</ul>
+      ${topM.length ? `<h3 class="yr-h">Top places</h3><ul class="merch">${topM.map(([n, v]) => `<li><span>${esc(n)}</span>${bar(v / topM[0][1], 'var(--accent)', 'thin')}<b>${fmtW(v)}</b></li>`).join('')}</ul>` : ''}
+      <button class="btn ghost block" id="yrCsv">${ci('download', 16)} Download ${y} summary (.csv)</button></div>`
+      : `${empty('calendar', `Nothing recorded in ${y}`, 'Your year in review fills in as you add transactions.')}`;
+    openSheet(`Your ${y} in review`, body, (p) => {
+      if (!d.active.length) return;
+      const labels = d.months.map((m) => monthLabel(m, 'short', false));
+      Charts.bars($('#yrBars', p), { labels, tipLabels: d.months.map(pLabel), series: [{ name: 'Income', color: 'var(--income)', values: d.T.map((t) => r2(t.inc)) }, { name: 'Expenses', color: 'var(--expense)', values: d.T.map((t) => r2(t.exp)) }], fmt, fmtAxis: fmtC, height: 200, aria: `Income and expenses in ${y}` });
+      Charts.animate(p);
+      $('#yrPrev', p).onclick = () => yearSheet(years[i - 1]);
+      $('#yrNext', p).onclick = () => yearSheet(years[i + 1]);
+      $('#yrCsv', p).onclick = () => yearCSV(y);
+    });
+  }
+
+  /* ---------- Pro: multiple budgets ---------- */
+  function openBook(id) {
+    if (id === BOOKS.active || !BOOKS.list.some((b) => b.id === id)) return;
+    save();
+    BOOKS.active = id; saveBooks();
+    KEY = bookKey(id);
+    if (!load()) {
+      // A brand-new budget: same preferences, empty data.
+      const prefs = JSON.parse(localStorage.getItem(bookKey(MAIN_BOOK)) || '{}').settings || {};
+      S = defaults();
+      S.settings = { ...S.settings, name: prefs.name || '', currency: prefs.currency || 'ZAR', currencySet: !!prefs.currencySet, payday: prefs.payday || 25, theme: prefs.theme || 'auto', accent: prefs.accent, lock: prefs.lock || null };
+      save();
+    }
+    setupFormatters(); applyTheme();
+    UI.month = UI.reportMonth = curP(); UI.filter = { q: '', type: 'all', cat: '', month: '' };
+    processRecurring(); drawNav();
+    location.hash = '#/home'; render();
+    toast(`Switched to ${BOOKS.list.find((b) => b.id === id).name}`);
+  }
+  function bookSheet(id) {
+    const b = id ? BOOKS.list.find((x) => x.id === id) : null;
+    const canDelete = b && b.id !== MAIN_BOOK && b.id !== BOOKS.active;
+    openSheet(b ? 'Rename budget' : 'New budget', `<form class="form" id="bkForm">
+      <label class="field"><span>Name</span><input id="bkName" maxlength="30" required value="${esc(b ? b.name : '')}" placeholder="e.g. Household" autofocus></label>
+      ${b ? '' : '<p class="muted sm">It starts empty, with the default accounts and categories. Your other budgets are not touched.</p>'}
+      <button class="btn primary block" type="submit">${b ? 'Save' : 'Create and open'}</button>
+      ${canDelete ? '<button class="btn danger block" type="button" id="bkDel">Delete this budget</button>' : ''}</form>`, (p) => {
+      $('#bkForm', p).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const name = $('#bkName', p).value.trim().slice(0, 30);
+        if (!name) return;
+        if (b) { b.name = name; saveBooks(); closeSheet(); drawNav(); markNav(route()); commit('Budget renamed'); return; }
+        const nb = { id: uid(), name };
+        BOOKS.list.push(nb); saveBooks(); closeSheet(); openBook(nb.id);
+      });
+      $('#bkDel', p)?.addEventListener('click', () => {
+        if (!confirm(`Delete the "${b.name}" budget and all its transactions? This cannot be undone unless you have a backup of it.`)) return;
+        try { localStorage.removeItem(bookKey(b.id)); } catch (e) { /* ignore */ }
+        BOOKS.list = BOOKS.list.filter((x) => x.id !== b.id); saveBooks(); closeSheet(); drawNav(); markNav(route()); commit(`${b.name} deleted`);
+      });
+    });
   }
 
   /* ---------- actions ---------- */
@@ -1919,6 +2102,17 @@
     'add-cat': (el) => catSheet(null, el.dataset.kind), 'edit-cat': (el) => catSheet(el.dataset.id),
     'cat-tab': (el) => { UI.catTab = el.dataset.k; render(false); },
     theme: (el) => { S.settings.theme = el.dataset.t; save(); applyTheme(); render(false); },
+    accent: (el) => {
+      const set = () => { S.settings.accent = el.dataset.a; save(); applyTheme(); render(false); };
+      if (el.dataset.a === 'violet') { if (isPro()) set(); return; }
+      proGate('Colour themes', set);
+    },
+    'pro-open': () => PRO.open(),
+    'year-review': () => proGate('Year in review', () => yearSheet()),
+    'book-new': () => proGate('Multiple budgets', () => bookSheet(null)),
+    'book-edit': (el) => proGate('Multiple budgets', () => bookSheet(el.dataset.id)),
+    // Going back to your first budget is always free, so nobody gets stuck if Pro is removed.
+    'book-open': (el) => (el.dataset.id === MAIN_BOOK ? openBook(MAIN_BOOK) : proGate('Multiple budgets', () => openBook(el.dataset.id))),
     'set-lock': setLock,
     'remove-lock': () => { S.settings.lock = null; commit('Passcode turned off'); },
     'export-json': () => backupNow(),
@@ -1952,6 +2146,7 @@
   let lastW = window.innerWidth;
   window.addEventListener('resize', () => { if (Math.abs(window.innerWidth - lastW) < 30) return; lastW = window.innerWidth; clearTimeout(rt); rt = setTimeout(() => render(false), 220); });
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', () => { applyTheme(); render(false); });
+  window.addEventListener('nextwave-pro-change', () => { applyTheme(); render(false); });
   let hiddenAt = 0;
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) hiddenAt = Date.now();
