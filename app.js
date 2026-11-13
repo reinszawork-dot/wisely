@@ -964,7 +964,7 @@
       $('#fCat').addEventListener('change', (e) => { f.cat = e.target.value; UI.limit = 120; render(false); });
       $('#fCard')?.addEventListener('change', (e) => { f.card = e.target.value; UI.limit = 120; render(false); });
     };
-    return `${header('Transactions', 'Every cent in and out. Income in green, spending in blue.', `<button class="btn ghost sm" data-act="import-bank">${ci('upload', 16)} Import statement</button><button class="btn primary sm desk-only" data-act="add-tx">${ci('plus', 16)} New</button>`)}
+    return `${header('Transactions', 'Every cent in and out. Income shows with a +, spending with a −.', `<button class="btn ghost sm" data-act="import-bank">${ci('upload', 16)} Import statement</button><button class="btn primary sm desk-only" data-act="add-tx">${ci('plus', 16)} New</button>`)}
       <div class="filters card">
         <label class="search">${icon('search', 18)}<input id="q" type="search" placeholder="Search notes, categories, amounts" value="${esc(f.q)}" aria-label="Search transactions"></label>
         <div class="filter-row">
