@@ -1416,8 +1416,36 @@
     document.body.classList.add('noscroll');
     $$('[data-close]', root).forEach((b) => b.addEventListener('click', closeSheet));
     const panel = $('.sheet-panel', root);
+    sheetDrag(panel);
     onMount?.(panel);
     setTimeout(() => ($('[autofocus]', panel) || $('input,select,button', panel))?.focus({ preventScroll: true }), 260);
+  }
+  /** Phone bottom sheet: drag the handle/header down to close. Follows the finger 1:1, closes on a
+   *  flick (> 0.11 px/ms) or when pulled past 30% of its height, otherwise springs back. */
+  function sheetDrag(panel) {
+    if (!window.matchMedia('(max-width: 860px)').matches) return;
+    let y0 = 0, t0 = 0, dy = 0, on = false;
+    panel.addEventListener('pointerdown', (e) => {
+      if (!e.target.closest('.sheet-grab, .sheet-head') || e.target.closest('button')) return;
+      on = true; y0 = e.clientY; t0 = e.timeStamp; dy = 0;
+      panel.setPointerCapture(e.pointerId);
+      panel.style.transition = 'none';
+    });
+    panel.addEventListener('pointermove', (e) => {
+      if (!on) return;
+      dy = e.clientY - y0;
+      panel.style.transform = `translateY(${dy > 0 ? dy : -Math.sqrt(-dy) * 2}px)`; // pulling up meets rising friction
+    });
+    const end = (e) => {
+      if (!on) return;
+      on = false;
+      panel.style.transition = '';
+      panel.style.transform = '';
+      const v = dy / Math.max(1, e.timeStamp - t0);
+      if (dy > panel.offsetHeight * 0.3 || (dy > 12 && v > 0.11)) closeSheet();
+    };
+    panel.addEventListener('pointerup', end);
+    panel.addEventListener('pointercancel', end);
   }
   function closeSheet() {
     const root = $('#sheet');
